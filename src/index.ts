@@ -52,7 +52,6 @@ const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
         dot: true,
         ignore: options.ignore || ['**/node_modules/**'],
       });
-      console.log(files);
 
       console.log('');
       console.log('tencent cos upload start');
@@ -68,9 +67,7 @@ const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
 
         const output = `${buildConfig.outDir + filePath} => ${color.green(completePath)}`;
 
-        console.log(fileFullPath);
 
-        console.log('fs.statSync(fileFullPath).size,', fs.statSync(fileFullPath).size);
         await cos.putObject({
           Bucket: options.bucket,
           Region: options.region,
