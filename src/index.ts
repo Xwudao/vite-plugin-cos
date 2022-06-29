@@ -41,6 +41,7 @@ const vitePluginUploadToCos = (options: UploadToCosOptions): Plugin => {
                 SecretId: options.SecretId,
                 SecretKey: options.SecretKey,
             })
+            console.log(cos)
             const files = await glob.sync(outDirPath + "/**/*", {
                 strict: true,
                 nodir: true,
