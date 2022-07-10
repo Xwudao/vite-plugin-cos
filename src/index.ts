@@ -10,15 +10,16 @@ type UploadToCosOptions = {
   secretKey: string;
   bucket: string;
   region: string;
-  replaceHtml?: boolean;
   ignore?: string[];
+  //remove previous assets in oss dir
+  removePrevious?: boolean;
 };
 
 const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
   let baseConfig = '/';
   let buildConfig: BuildOptions = {};
   options = {
-    replaceHtml: true,
+    removePrevious: false,
     ...options,
   };
 
@@ -41,7 +42,7 @@ const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
       // )
       const outDirPath = buildConfig.outDir || '';
       //
-      const { pathname: ossBasePath, origin: ossOrigin } = new URL(baseConfig);
+      const { pathname: cosBasePath, origin: cosOrigin } = new URL(baseConfig);
 
       const cos = new COS({
         SecretId: options.secretId,
@@ -53,25 +54,53 @@ const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
         ignore: options.ignore || ['**/node_modules/**'],
       });
 
+      if (options.removePrevious) {
+        let list = await cos.getBucket({
+          Bucket: options.bucket,
+          Region: options.region,
+          Prefix: cosBasePath.replace(/^\//, ''),
+        });
+        if (list.Contents.length > 0) {
+          let data = await cos.deleteMultipleObject({
+            Bucket: options.bucket,
+            Region: options.region,
+            Objects: list.Contents.map((item) => {
+              return { Key: item.Key };
+            }),
+          });
+
+          if (data.statusCode === 200) {
+            console.log(
+              color.green('[vite-plugin-upload-to-cos]'),
+              'remove previous assets success',
+            );
+          } else {
+            console.log(
+              color.red('[vite-plugin-upload-to-cos]'),
+              'remove previous assets failed',
+            );
+          }
+        }
+      }
+
       console.log('');
-      console.log('tencent cos upload start');
+      console.log(color.green('[vite-plugin-upload-to-cos]'), 'upload start');
       console.log('');
 
       const startTime = new Date().getTime();
       for (const fileFullPath of files) {
         const filePath = fileFullPath.split(outDirPath)[1]; // eg: '/assets/vendor.bfb92b77.js'
 
-        const ossFilePath = ossBasePath.replace(/\/$/, '') + filePath; // eg: '/base/assets/vendor.bfb92b77.js'
+        const cosFilePath = cosBasePath.replace(/\/$/, '') + filePath; // eg: '/base/assets/vendor.bfb92b77.js'
 
-        const completePath = ossOrigin + ossFilePath; // eg: 'https://foo.com/base/assets/vendor.bfb92b77.js'
+        const completePath = cosOrigin + cosFilePath; // eg: 'https://foo.com/base/assets/vendor.bfb92b77.js'
 
         const output = `${buildConfig.outDir + filePath} => ${color.green(completePath)}`;
-
 
         await cos.putObject({
           Bucket: options.bucket,
           Region: options.region,
-          Key: ossFilePath,
+          Key: cosFilePath,
           Body: fs.readFileSync(fileFullPath),
           StorageClass: 'STANDARD',
           ContentLength: fs.statSync(fileFullPath).size,
