@@ -13,6 +13,8 @@ type UploadToCosOptions = {
   ignore?: string[];
   //remove previous assets in oss dir
   removePrevious?: boolean;
+  // if existed in cos, don't upload again
+  overwrite?: boolean;
 };
 
 const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
@@ -97,15 +99,36 @@ const vitePluginUploadToCos = (options: UploadToCosOptions): PluginOption => {
 
         const output = `${buildConfig.outDir + filePath} => ${color.green(completePath)}`;
 
-        await cos.putObject({
-          Bucket: options.bucket,
-          Region: options.region,
-          Key: cosFilePath,
-          Body: fs.readFileSync(fileFullPath),
-          StorageClass: 'STANDARD',
-          ContentLength: fs.statSync(fileFullPath).size,
-        });
-        console.log(output);
+        let canUpload = false;
+
+        try {
+          await cos.headObject({
+            Bucket: options.bucket,
+            Region: options.region,
+            Key: cosFilePath,
+          });
+          console.log(
+            color.gray('[vite-plugin-upload-to-cos] existed in cos: '),
+            filePath,
+          );
+        } catch (e) {
+          canUpload = true;
+        }
+
+        if (options.overwrite) {
+          canUpload = true;
+        }
+
+        if (canUpload) {
+          await cos.putObject({
+            Bucket: options.bucket,
+            Region: options.region,
+            Key: cosFilePath,
+            Body: fs.readFileSync(fileFullPath),
+            StorageClass: 'STANDARD',
+          });
+          console.log(output);
+        }
       }
 
       const duration = (new Date().getTime() - startTime) / 1000;
